@@ -15,8 +15,10 @@
 
 #include "flang/Common/indirection.h"
 #include "flang/Parser/parse-tree.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Frontend/OpenMP/OMP.h"
+#include "llvm/Frontend/OpenMP/OMPDescriptors.h"
 
 #include <cassert>
 #include <iterator>
@@ -200,6 +202,45 @@ struct OmpAllocateInfo {
 };
 
 OmpAllocateInfo SplitOmpAllocate(const OmpAllocateDirective &x);
+
+namespace detail {
+template <typename ClauseTy, typename VoidTy = void> struct HasModifierImpl {
+  static constexpr bool value{false};
+};
+template <typename ClauseTy>
+struct HasModifierImpl<ClauseTy, std::void_t<typename ClauseTy::Modifier>> {
+  static constexpr bool value{true};
+};
+} // namespace detail
+template <typename ClauseTy>
+static constexpr bool HasModifier = detail::HasModifierImpl<ClauseTy>::value;
+
+struct AppliedModifier {
+  llvm::omp::Modifier modifierId;
+  parser::CharBlock source;
+};
+
+struct AppliedModifierInfo {
+  llvm::SmallVector<AppliedModifier> modifiers;
+};
+
+template <typename UnionTy>
+AppliedModifierInfo GetAppliedModifiers(
+    const std::optional<std::list<UnionTy>> &modifiers) {
+  AppliedModifierInfo info;
+  if (modifiers) {
+    for (auto &m : *modifiers) {
+      common::visit(
+          [&](auto &&s) {
+            info.modifiers.emplace_back(AppliedModifier{s.Id, m.source});
+          },
+          m.u);
+    }
+  }
+  return info;
+}
+
+AppliedModifierInfo GetAppliedModifiers(const parser::OmpClause &clause);
 
 template <typename R, typename = void, typename = void> struct is_range {
   static constexpr bool value{false};
