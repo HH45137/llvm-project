@@ -47,16 +47,16 @@ ol_result_t __llvmLaunchKernelImpl(const char *KernelID, dim3 GridDim,
   LaunchSizeArgs.DynSharedMemory = DynamicSharedMem;
 
   StreamTy *LaunchStream = Stream ? reinterpret_cast<StreamTy *>(Stream)
-                                  : ThreadState::getDefaultStream();
-  if (!LaunchStream || !RuntimeState::isStreamRegistered(LaunchStream) ||
+                                  : ThreadState.getDefaultStream();
+  if (!LaunchStream || !State.isStreamRegistered(LaunchStream) ||
       LaunchStream->Device != Device)
     return &InvalidConfigurationError;
 
-  if (LaunchStream->Kind == llvm::offload::QueueKind::LegacyDefault) {
+  if (LaunchStream->Kind == QueueKind::LegacyDefault) {
     ol_result_t Result = waitOnBlockingStreams();
     if (Result != OL_SUCCESS)
       return Result;
-  } else if (LaunchStream->Kind == llvm::offload::QueueKind::ExplicitBlocking) {
+  } else if (LaunchStream->Kind == QueueKind::ExplicitBlocking) {
     ol_result_t Result = waitOnLegacyDefaultStream(LaunchStream, Device);
     if (Result != OL_SUCCESS)
       return Result;
