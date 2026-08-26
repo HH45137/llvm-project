@@ -13,9 +13,15 @@
 
 ! CHECK-LABEL: func.func @_QPtest_do(
 ! CHECK-NOT:     omp.parallel
-! CHECK:         omp.wsloop private({{.*}}Ei_private_i32
-! CHECK:           omp.loop_nest
-! CHECK:             hlfir.assign
+! CHECK:         omp.wsloop private(@_QFtest_doEi_private_i32 {{.*}} ->
+! CHECK-SAME:      %[[DO_PRIVATE:.*]] : !fir.ref<i32>)
+! CHECK:           omp.loop_nest (%[[DO_IV:.*]]) :
+! CHECK:             %[[DO_PRIVATE_DECL:.*]]:2 =
+! CHECK-SAME:          hlfir.declare %[[DO_PRIVATE]]
+! CHECK:             hlfir.assign %[[DO_IV]] to %[[DO_PRIVATE_DECL]]#0
+! CHECK-NOT:         {{^ *}}}
+! CHECK:             %[[DO_ELEMENT:.*]] = hlfir.designate
+! CHECK:             hlfir.assign {{.*}} to %[[DO_ELEMENT]]
 ! CHECK:             omp.yield
 ! CHECK:         return
 subroutine test_do(n, a)
@@ -69,13 +75,52 @@ end subroutine
 
 ! CHECK-LABEL: func.func @_QPtest_begin_do(
 ! CHECK:         fir.if {{.*}} {
-! CHECK:           omp.wsloop private({{.*}}Ei_private_i32
-! CHECK:             omp.loop_nest
-! CHECK:               hlfir.assign
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK:           omp.wsloop private(@_QFtest_begin_doEi_private_i32 {{.*}} ->
+! CHECK-SAME:        %[[BEGIN_DO_PRIVATE:.*]] : !fir.ref<i32>)
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK:             omp.loop_nest (%[[BEGIN_DO_IV:.*]]) :
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK:               %[[BEGIN_DO_PRIVATE_DECL:.*]]:2 =
+! CHECK-SAME:            hlfir.declare %[[BEGIN_DO_PRIVATE]]
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK:               hlfir.assign %[[BEGIN_DO_IV]] to
+! CHECK-SAME:            %[[BEGIN_DO_PRIVATE_DECL]]#0
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:           {{^ *}}}
+! CHECK:               %[[BEGIN_DO_ELEMENT:.*]] = hlfir.designate
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:           {{^ *}}}
+! CHECK:               hlfir.assign {{.*}} to %[[BEGIN_DO_ELEMENT]]
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         } else {
 ! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:           fir.do_loop
-! CHECK:             hlfir.assign
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:       {{^ *}}}
+! CHECK:             %[[BEGIN_DO_FALLBACK_ELEMENT:.*]] = hlfir.designate
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:       {{^ *}}}
+! CHECK:             hlfir.assign {{.*}} to %[[BEGIN_DO_FALLBACK_ELEMENT]]
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         }
 ! CHECK-NOT:     fir.do_loop
 ! CHECK-NOT:     omp.
@@ -95,19 +140,47 @@ end subroutine
 ! The following loop must remain available when the PFT is reused for ENTRY.
 ! CHECK-LABEL: func.func @_QPtest_standalone_entry_no_directive(
 ! CHECK:         fir.if {{.*}} {
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       fir.do_loop
 ! CHECK:           omp.wsloop
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK:             omp.loop_nest
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         } else {
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:           fir.do_loop
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         }
 ! CHECK-NOT:     fir.do_loop
+! CHECK-NOT:     omp.
 ! CHECK:         return
 ! CHECK-LABEL: func.func @_QPtest_alt_standalone_entry_no_directive(
 ! CHECK:         fir.if {{.*}} {
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       fir.do_loop
 ! CHECK:           omp.wsloop
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK:             omp.loop_nest
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         } else {
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:           fir.do_loop
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         }
 ! CHECK-NOT:     fir.do_loop
+! CHECK-NOT:     omp.
 ! CHECK:         return
 ! CHECK-LABEL: func.func @_QPtest_after_standalone_entry_no_directive(
 ! CHECK-NOT:     fir.if
@@ -428,11 +501,45 @@ end subroutine
 ! attached to the associated loop before runtime selection.
 ! CHECK-LABEL: func.func @_QPtest_begin_unroll_fallback(
 ! CHECK:         fir.if {{.*}} {
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
 ! CHECK:           omp.wsloop
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK:             omp.loop_nest
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:         {{^ *}}}
+! CHECK:               %[[BEGIN_UNROLL_ELEMENT:.*]] = hlfir.designate
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:         {{^ *}}}
+! CHECK:               hlfir.assign {{.*}} to %[[BEGIN_UNROLL_ELEMENT]]
+! CHECK-NOT:       omp.wsloop
+! CHECK-NOT:       omp.loop_nest
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         } else {
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:           fir.do_loop
 ! CHECK-SAME:        attributes {loopAnnotation = #[[UNROLL_ANNOTATION]]}
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:         {{^ *}}}
+! CHECK:             %[[BEGIN_UNROLL_FALLBACK_ELEMENT:.*]] = hlfir.designate
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
+! CHECK-NOT:         {{^ *}}}
+! CHECK:             hlfir.assign {{.*}} to %[[BEGIN_UNROLL_FALLBACK_ELEMENT]]
+! CHECK-NOT:       omp.
+! CHECK-NOT:       fir.do_loop
 ! CHECK:         }
+! CHECK-NOT:     omp.
+! CHECK-NOT:     fir.do_loop
 ! CHECK:         return
 subroutine test_begin_unroll_fallback(flag, n, a)
   logical, intent(in) :: flag
