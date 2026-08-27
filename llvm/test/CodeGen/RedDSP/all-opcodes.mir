@@ -1,0 +1,135 @@
+# RUN: llc -mtriple=reddsp-unknown-none -start-after=virtregrewriter -filetype=asm %s -o - | FileCheck %s
+
+# This test starts after register allocation so every ISA operation, including
+# control-flow operations that have no direct generic-IR equivalent, can be
+# checked at the textual assembly boundary consumed by red_dsp_asm_opti.py.
+
+--- |
+  define void @data_ops() { ret void }
+  define void @jump_op() { ret void }
+  define void @call_op() { ret void }
+  define void @branch_ops() { ret void }
+...
+---
+name: data_ops
+tracksRegLiveness: true
+noVRegs: true
+isSSA: true
+liveins:
+  - { reg: '$r2' }
+  - { reg: '$r3' }
+  - { reg: '$r4' }
+body: |
+  bb.0:
+    liveins: $r2, $r3, $r4
+    $r2 = ADDrr $r3, $r4
+    $r2 = SUBrr $r3, $r4
+    $r2 = MULrr $r3, $r4
+    $r2 = DIVrr $r3, $r4
+    $r2 = ADDri $r3, 1
+    $r2 = SUBri $r3, 1
+    $r2 = MULri $r3, 1
+    $r2 = DIVri $r3, 1
+    $r2 = MACrr $r2, $r3, $r4
+    $r2 = MACri $r2, $r3, 1
+    $r2 = ANDrr $r3, $r4
+    $r2 = ORrr $r3, $r4
+    $r2 = XORrr $r3, $r4
+    $r2 = SFLrr $r3, $r4
+    $r2 = SFRrr $r3, $r4
+    $r2 = CMPrr $r3, $r4
+    $r2 = ANDri $r3, 1
+    $r2 = ORri $r3, 1
+    $r2 = XORri $r3, 1
+    $r2 = SFLri $r3, 1
+    $r2 = SFRri $r3, 1
+    $r2 = CMPri $r3, 1
+    $r2 = LD $r3, 0
+    ST $r3, $r2, 0
+    NOP
+    RET implicit $r15
+...
+---
+name: jump_op
+tracksRegLiveness: true
+noVRegs: true
+isSSA: true
+liveins:
+  - { reg: '$r2' }
+body: |
+  bb.0:
+    liveins: $r2
+    JMP $r2
+...
+---
+name: call_op
+tracksRegLiveness: true
+noVRegs: true
+isSSA: true
+liveins:
+  - { reg: '$r2' }
+body: |
+  bb.0:
+    liveins: $r2
+    CALL $r2, implicit-def $r15
+    RET implicit $r15
+...
+---
+name: branch_ops
+tracksRegLiveness: true
+noVRegs: true
+isSSA: true
+liveins:
+  - { reg: '$r2' }
+  - { reg: '$r3' }
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r2, $r3
+    BEQ $r2, $r3, %bb.1
+    BNE $r2, $r3, %bb.2
+
+  bb.1:
+    $r2 = MOVi 1
+    RET implicit $r15
+
+  bb.2:
+    $r2 = MOVi 2
+    RET implicit $r15
+...
+
+# CHECK-LABEL: data_ops:
+# CHECK: ADD.INT R2 R3 R4 X
+# CHECK: SUB.INT R2 R3 R4 X
+# CHECK: MUL.INT R2 R3 R4 X
+# CHECK: DIV.INT R2 R3 R4 X
+# CHECK: ADD.INT.IMM R2 R3 X 1
+# CHECK: SUB.INT.IMM R2 R3 X 1
+# CHECK: MUL.INT.IMM R2 R3 X 1
+# CHECK: DIV.INT.IMM R2 R3 X 1
+# CHECK: MAC.INT R2 R3 R4 X
+# CHECK: MAC.INT.IMM R2 R3 X 1
+# CHECK: AND R2 R3 R4 X
+# CHECK: OR R2 R3 R4 X
+# CHECK: XOR R2 R3 R4 X
+# CHECK: SFL R2 R3 R4 X
+# CHECK: SFR R2 R3 R4 X
+# CHECK: CMP R2 R3 R4 X
+# CHECK: AND.IMM R2 R3 X 1
+# CHECK: OR.IMM R2 R3 X 1
+# CHECK: XOR.IMM R2 R3 X 1
+# CHECK: SFL.IMM R2 R3 X 1
+# CHECK: SFR.IMM R2 R3 X 1
+# CHECK: CMP.IMM R2 R3 X 1
+# CHECK: LD R2 R3 X 0
+# CHECK: ST R3 R2 X 0
+# CHECK: NOP
+# CHECK: RET R15 X X X
+# CHECK-LABEL: jump_op:
+# CHECK: JMP R2 X X X
+# CHECK-LABEL: call_op:
+# CHECK: CALL R15 R2 X X
+# CHECK: RET R15 X X X
+# CHECK-LABEL: branch_ops:
+# CHECK: BEQ R2 R3 X .LBB3_1
+# CHECK: BNE R2 R3 X .LBB3_2

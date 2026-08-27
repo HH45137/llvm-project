@@ -120,6 +120,8 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
     return "riscv32be";
   case riscv64be:
     return "riscv64be";
+  case reddsp:
+    return "reddsp";
   case shave:
     return "shave";
   case sparc:
@@ -681,6 +683,7 @@ Triple::ArchType Triple::parseArch(StringRef ArchName) {
           .Case("riscv64", Triple::riscv64)
           .Case("riscv32be", Triple::riscv32be)
           .Case("riscv64be", Triple::riscv64be)
+          .Case("reddsp", Triple::reddsp)
           .Case("hexagon", Triple::hexagon)
           .Cases({"s390x", "systemz"}, Triple::systemz)
           .Case("sparc", Triple::sparc)
@@ -1044,6 +1047,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::tcele64:
   case Triple::thumbeb:
   case Triple::ve:
+  case Triple::reddsp:
   case Triple::xcore:
   case Triple::xtensa:
     return Triple::ELF;
@@ -1810,6 +1814,7 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::thumbeb:
   case llvm::Triple::wasm32:
   case llvm::Triple::x86:
+  case llvm::Triple::reddsp:
   case llvm::Triple::xcore:
   case llvm::Triple::xtensa:
     return 32;
@@ -1921,6 +1926,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::thumbeb:
   case Triple::wasm32:
   case Triple::x86:
+  case Triple::reddsp:
   case Triple::xcore:
   case Triple::xtensa:
     // Already 32-bit.

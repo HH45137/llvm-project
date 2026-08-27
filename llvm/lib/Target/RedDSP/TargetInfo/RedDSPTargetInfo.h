@@ -1,0 +1,4 @@
+#ifndef LLVM_LIB_TARGET_REDDSP_TARGETINFO_REDDSPTARGETINFO_H
+#define LLVM_LIB_TARGET_REDDSP_TARGETINFO_REDDSPTARGETINFO_H
+namespace llvm { class Target; Target &getTheRedDSPTarget(); }
+#endif

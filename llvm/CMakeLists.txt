@@ -595,6 +595,7 @@ set(LLVM_ALL_TARGETS
   MSP430
   NVPTX
   PowerPC
+  RedDSP
   RISCV
   Sparc
   SPIRV
