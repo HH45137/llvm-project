@@ -8,4 +8,4 @@ foreach I = 0-15 in {
 }
 
 def GR32 : RegisterClass<"RedDSP", [i32], 32,
-  (add (sequence "R%i", 2, 14))>;
+  (add (sequence "R%i", 2, 15))>;

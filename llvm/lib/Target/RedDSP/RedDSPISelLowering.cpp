@@ -21,7 +21,9 @@ RedDSPTargetLowering::RedDSPTargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
   setOperationAction(ISD::ROTL, MVT::i32, Expand);
   setOperationAction(ISD::ROTR, MVT::i32, Expand);
-  setOperationAction(ISD::SRL, MVT::i32, Expand);
+  setOperationAction(ISD::SHL, MVT::i32, Legal);
+  setOperationAction(ISD::SRA, MVT::i32, Legal);
+  setOperationAction(ISD::SRL, MVT::i32, Legal);
   setOperationAction(ISD::SREM, MVT::i32, Expand);
   setOperationAction(ISD::UREM, MVT::i32, Expand);
   setOperationAction(ISD::SDIV, MVT::i32, Legal);
@@ -176,6 +178,78 @@ bool RedDSPTargetLowering::CanLowerReturn(
   SmallVector<CCValAssign, 4> Locs;
   CCState State(CC, IsVarArg, MF, Locs, Context);
   return State.CheckReturn(Outs, RetCC_RedDSP);
+}
+
+SDValue
+RedDSPTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
+                                SmallVectorImpl<SDValue> &InVals) const {
+  SelectionDAG &DAG = CLI.DAG;
+  SDLoc &DL = CLI.DL;
+  SmallVectorImpl<ISD::OutputArg> &Outs = CLI.Outs;
+  SmallVectorImpl<SDValue> &OutVals = CLI.OutVals;
+  SmallVectorImpl<ISD::InputArg> &Ins = CLI.Ins;
+  SDValue Chain = CLI.Chain;
+  SDValue Callee = CLI.Callee;
+  CallingConv::ID CallConv = CLI.CallConv;
+  bool IsVarArg = CLI.IsVarArg;
+  bool &IsTailCall = CLI.IsTailCall;
+  IsTailCall = false;
+  MachineFunction &MF = DAG.getMachineFunction();
+
+  if (IsVarArg)
+    report_fatal_error("RED DSP does not support variadic calls");
+
+  SmallVector<CCValAssign, 8> ArgLocs;
+  CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
+  CCInfo.AnalyzeCallOperands(Outs, CC_RedDSP);
+
+  SDValue Glue;
+  SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPass;
+  for (unsigned I = 0; I < ArgLocs.size(); ++I) {
+    CCValAssign &VA = ArgLocs[I];
+    SDValue ArgValue = OutVals[I];
+    if (VA.isRegLoc()) {
+      RegsToPass.push_back(std::make_pair(VA.getLocReg(), ArgValue));
+    } else {
+      report_fatal_error("RED DSP stack arguments for calls not supported");
+    }
+  }
+
+  for (auto &Reg : RegsToPass) {
+    Chain = DAG.getCopyToReg(Chain, DL, Reg.first, Reg.second, Glue);
+    Glue = Chain.getValue(1);
+  }
+
+  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
+    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, MVT::i32);
+  else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee))
+    Callee = DAG.getTargetExternalSymbol(S->getSymbol(), MVT::i32);
+
+  SmallVector<SDValue, 8> Ops;
+  Ops.push_back(Chain);
+  Ops.push_back(Callee);
+  for (auto &Reg : RegsToPass)
+    Ops.push_back(DAG.getRegister(Reg.first, MVT::i32));
+  if (Glue.getNode())
+    Ops.push_back(Glue);
+
+  Chain = DAG.getNode(RedDSPISD::CALL, DL, DAG.getVTList(MVT::Other, MVT::Glue),
+                      Ops);
+  Glue = Chain.getValue(1);
+
+  SmallVector<CCValAssign, 4> RVLocs;
+  CCState RVInfo(CallConv, IsVarArg, MF, RVLocs, *DAG.getContext());
+  RVInfo.AnalyzeCallResult(Ins, RetCC_RedDSP);
+
+  for (unsigned I = 0; I < RVLocs.size(); ++I) {
+    CCValAssign &VA = RVLocs[I];
+    Chain = DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getLocVT(), Glue)
+                .getValue(1);
+    Glue = Chain.getValue(2);
+    InVals.push_back(Chain.getValue(0));
+  }
+
+  return Chain;
 }
 
 SDValue

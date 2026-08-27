@@ -32,6 +32,10 @@ void RedDSPAsmPrinter::printOperand(const MachineOperand &MO, raw_ostream &OS) {
     OS << MO.getImm();
   } else if (MO.isMBB()) {
     MO.getMBB()->getSymbol()->print(OS, MAI);
+  } else if (MO.isGlobal()) {
+    getSymbol(MO.getGlobal())->print(OS, MAI);
+  } else if (MO.isSymbol()) {
+    OS << MO.getSymbolName();
   } else {
     llvm_unreachable("unsupported RED DSP assembly operand");
   }
@@ -84,6 +88,7 @@ void RedDSPAsmPrinter::emitInstruction(const MachineInstr *MI) {
     PRINT(BR, "BEQ ");
     PRINT(JMP, "JMP ");
     PRINT(CALL, "CALL ");
+    PRINT(CALL_SYM, "CALL ");
   case RedDSP::NOP:
     OS << "NOP";
     break;
@@ -147,7 +152,7 @@ void RedDSPAsmPrinter::emitInstruction(const MachineInstr *MI) {
     } else if (Opc == RedDSP::JMP) {
       printOperand(MI->getOperand(0), OS);
       OS << " X X X";
-    } else if (Opc == RedDSP::CALL) {
+    } else if (Opc == RedDSP::CALL || Opc == RedDSP::CALL_SYM) {
       OS << "R15 ";
       printOperand(MI->getOperand(0), OS);
       OS << " X X";

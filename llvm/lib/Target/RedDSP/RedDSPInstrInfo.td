@@ -2,12 +2,16 @@ def simm9 : Operand<i32>;
 def uimm9 : Operand<i32>;
 def uimm5 : Operand<i32>;
 def brtarget : Operand<OtherVT>;
+def calltarget : Operand<i32>;
 
 def simm9_node : PatLeaf<(imm), [{ return isInt<9>(N->getSExtValue()); }]>;
 def uimm9_node : PatLeaf<(imm), [{ return isUInt<9>(N->getZExtValue()); }]>;
 def uimm5_node : PatLeaf<(imm), [{ return isUInt<5>(N->getZExtValue()); }]>;
+def SDT_RedDSPCall : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
 def RedDSPRet : SDNode<"RedDSPISD::RET_FLAG", SDTNone,
                        [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+def RedDSPCall : SDNode<"RedDSPISD::CALL", SDT_RedDSPCall,
+                        [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def RedDSPBrCond : SDNode<"RedDSPISD::BRCOND", SDTBrcond,
                           [SDNPHasChain]>;
 def RedDSPCmp : SDNode<"RedDSPISD::CMP", SDTIntBinOp>;
@@ -92,6 +96,9 @@ def SFRri : RedDSPInst<(outs GR32:$dst), (ins GR32:$src1, uimm5:$imm),
   "SFR.IMM $dst $src1 X $imm",
   [(set GR32:$dst, (sra GR32:$src1, uimm5_node:$imm))]>;
 
+def : Pat<(srl GR32:$src1, GR32:$src2), (SFRrr GR32:$src1, GR32:$src2)>;
+def : Pat<(srl GR32:$src1, uimm5_node:$imm), (SFRri GR32:$src1, uimm5_node:$imm)>;
+
 def : Pat<(udiv GR32:$src1, GR32:$src2), (DIVrr GR32:$src1, GR32:$src2)>;
 def : Pat<(udiv GR32:$src1, simm9_node:$imm), (DIVri GR32:$src1, simm9_node:$imm)>;
 def : Pat<(srem GR32:$src1, GR32:$src2),
@@ -163,6 +170,14 @@ def CALL : RedDSPInst<(outs), (ins GR32:$target),
   let isCall = 1;
   let Defs = [R15];
 }
+
+def CALL_SYM : RedDSPInst<(outs), (ins calltarget:$target),
+    "CALL R15 $target X X", [(RedDSPCall tglobaladdr:$target)]> {
+  let isCall = 1;
+  let Defs = [R15];
+}
+def : Pat<(RedDSPCall texternalsym:$target), (CALL_SYM texternalsym:$target)>;
+def : Pat<(RedDSPCall GR32:$target), (CALL GR32:$target)>;
 
 def NOP : RedDSPInst<(outs), (ins), "NOP", []>;
 
