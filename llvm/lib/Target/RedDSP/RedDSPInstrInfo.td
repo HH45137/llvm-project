@@ -92,6 +92,17 @@ def SFRri : RedDSPInst<(outs GR32:$dst), (ins GR32:$src1, uimm5:$imm),
   "SFR.IMM $dst $src1 X $imm",
   [(set GR32:$dst, (sra GR32:$src1, uimm5_node:$imm))]>;
 
+def : Pat<(udiv GR32:$src1, GR32:$src2), (DIVrr GR32:$src1, GR32:$src2)>;
+def : Pat<(udiv GR32:$src1, simm9_node:$imm), (DIVri GR32:$src1, simm9_node:$imm)>;
+def : Pat<(srem GR32:$src1, GR32:$src2),
+          (SUBrr GR32:$src1, (MULrr (DIVrr GR32:$src1, GR32:$src2), GR32:$src2))>;
+def : Pat<(urem GR32:$src1, GR32:$src2),
+          (SUBrr GR32:$src1, (MULrr (DIVrr GR32:$src1, GR32:$src2), GR32:$src2))>;
+def : Pat<(srem GR32:$src1, simm9_node:$imm),
+          (SUBrr GR32:$src1, (MULri (DIVri GR32:$src1, simm9_node:$imm), simm9_node:$imm))>;
+def : Pat<(urem GR32:$src1, simm9_node:$imm),
+          (SUBrr GR32:$src1, (MULri (DIVri GR32:$src1, simm9_node:$imm), simm9_node:$imm))>;
+
 def MACri : RedDSPInst<(outs GR32:$dst),
     (ins GR32:$acc, GR32:$src1, simm9:$imm),
     "MAC.INT.IMM $dst $src1 X $imm",
