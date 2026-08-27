@@ -11,6 +11,7 @@ def RedDSPRet : SDNode<"RedDSPISD::RET_FLAG", SDTNone,
 def RedDSPBrCond : SDNode<"RedDSPISD::BRCOND", SDTBrcond,
                           [SDNPHasChain]>;
 def RedDSPCmp : SDNode<"RedDSPISD::CMP", SDTIntBinOp>;
+def RedDSPCBE : SDNode<"RedDSPISD::CBE", SDTIntBinOp>;
 
 class RedDSPInst<dag Outs, dag Ins, string Asm, list<dag> Pats = []>
     : Instruction {
@@ -48,6 +49,20 @@ def MACrr : RedDSPInst<(outs GR32:$dst),
 def CMPrr : RedDSPInst<(outs GR32:$dst), (ins GR32:$src1, GR32:$src2),
   "CMP $dst $src1 $src2 X",
   [(set GR32:$dst, (RedDSPCmp GR32:$src1, GR32:$src2))]>;
+
+def CBErr : RedDSPInst<
+      (outs GR32:$dst),
+      (ins GR32:$src1, GR32:$src2),
+      "CBE $dst $src1 $src2 X",
+      [(set GR32:$dst, (RedDSPCBE GR32:$src1, GR32:$src2))]
+    >;
+
+def SELECT : RedDSPInst<(outs GR32:$dst),
+                        (ins GR32:$cond, GR32:$truev, GR32:$falsev),
+                        "# SELECT PSEUDO",
+                        [(set GR32:$dst, (select GR32:$cond, GR32:$truev, GR32:$falsev))]> {
+  let usesCustomInserter = 1;
+}
 
 def ADDri : RedDSPInst<(outs GR32:$dst), (ins GR32:$src1, simm9:$imm),
   "ADD.INT.IMM $dst $src1 X $imm",

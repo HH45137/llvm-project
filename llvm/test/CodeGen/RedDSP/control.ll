@@ -30,6 +30,34 @@ define i32 @eq_imm(i32 %a) {
   ret i32 %v
 }
 
+define i32 @ge_value(i32 %a, i32 %b) {
+; CHECK-LABEL: ge_value:
+; CHECK: CBE
+  %c = icmp sge i32 %a, %b
+  %v = zext i1 %c to i32
+  ret i32 %v
+}
+
+define i32 @ge_branch(i32 %a, i32 %b) {
+; CHECK-LABEL: ge_branch:
+; CHECK: CBE
+; CHECK: BNE
+  %c = icmp sge i32 %a, %b
+  br i1 %c, label %yes, label %no
+yes:
+  ret i32 1
+no:
+  ret i32 0
+}
+
+define i32 @le_value(i32 %a, i32 %b) {
+; CHECK-LABEL: le_value:
+; CHECK: CBE {{R[0-9]+}} R3 R2 X
+  %c = icmp sle i32 %a, %b
+  %v = zext i1 %c to i32
+  ret i32 %v
+}
+
 define i32 @mac_reg(i32 %acc, i32 %a, i32 %b) {
 ; CHECK-LABEL: mac_reg:
 ; CHECK: MAC.INT

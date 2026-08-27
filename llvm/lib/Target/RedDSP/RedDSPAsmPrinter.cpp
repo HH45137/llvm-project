@@ -74,6 +74,7 @@ void RedDSPAsmPrinter::emitInstruction(const MachineInstr *MI) {
     PRINT(MACri, "MAC.INT.IMM ");
     PRINT(CMPrr, "CMP ");
     PRINT(CMPri, "CMP.IMM ");
+    PRINT(CBErr, "CBE ");
     PRINT(MOVrr, "ADD.INT ");
     PRINT(MOVi, "ADD.INT.IMM ");
     PRINT(LD, "LD ");
@@ -133,6 +134,13 @@ void RedDSPAsmPrinter::emitInstruction(const MachineInstr *MI) {
       printOperand(MI->getOperand(1), OS);
       OS << " X ";
       printOperand(MI->getOperand(2), OS);
+    } else if (Opc == RedDSP::CBErr) {
+      printOperand(MI->getOperand(0), OS);
+      OS << ' ';
+      printOperand(MI->getOperand(1), OS);
+      OS << ' ';
+      printOperand(MI->getOperand(2), OS);
+      OS << " X";
     } else if (Opc == RedDSP::BR) {
       OS << "R0 R0 X ";
       printOperand(MI->getOperand(0), OS);

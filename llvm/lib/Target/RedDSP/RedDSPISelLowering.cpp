@@ -5,6 +5,8 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+#include <utility>
 
 using namespace llvm;
 #define GET_CALLING_CONV_IMPL
@@ -23,6 +25,8 @@ RedDSPTargetLowering::RedDSPTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SETCC, MVT::i32, Custom);
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
   setOperationAction(ISD::BR_CC, MVT::i32, Custom);
+  setOperationAction(ISD::SELECT, MVT::i32, Legal);
+  setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32, Expand);
   setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
@@ -32,33 +36,103 @@ RedDSPTargetLowering::RedDSPTargetLowering(const TargetMachine &TM,
 SDValue RedDSPTargetLowering::LowerOperation(SDValue Op,
                                              SelectionDAG &DAG) const {
   SDLoc DL(Op);
+  auto lowerSignedComparison = [&](ISD::CondCode CC, SDValue LHS,
+                                   SDValue RHS) -> SDValue {
+    bool Invert = false;
+    switch (CC) {
+    case ISD::SETGE:
+      break;
+    case ISD::SETLE:
+      std::swap(LHS, RHS);
+      break;
+    case ISD::SETLT:
+      Invert = true;
+      break;
+    case ISD::SETGT:
+      std::swap(LHS, RHS);
+      Invert = true;
+      break;
+    default:
+      return SDValue();
+    }
+
+    SDValue Result = DAG.getNode(RedDSPISD::CBE, DL, MVT::i32, LHS, RHS);
+    if (Invert)
+      Result = DAG.getNode(ISD::XOR, DL, MVT::i32, Result,
+                           DAG.getConstant(1, DL, MVT::i32));
+    return Result;
+  };
+
   switch (Op.getOpcode()) {
+  case ISD::SELECT_CC: {
+    SDValue LHS = Op.getOperand(0);
+    SDValue RHS = Op.getOperand(1);
+    SDValue TrueVal = Op.getOperand(2);
+    SDValue FalseVal = Op.getOperand(3);
+    ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
+
+    SDValue Cond = lowerSignedComparison(CC, LHS, RHS);
+    if (!Cond) {
+      if (CC == ISD::SETEQ || CC == ISD::SETNE) {
+        Cond = DAG.getNode(RedDSPISD::CMP, DL, MVT::i32, LHS, RHS);
+        if (CC == ISD::SETNE)
+          Cond = DAG.getNode(ISD::XOR, DL, MVT::i32, Cond,
+                             DAG.getConstant(1, DL, MVT::i32));
+      } else {
+        report_fatal_error(
+            "RED DSP does not support this comparison for select_cc");
+      }
+    }
+    return DAG.getNode(ISD::SELECT, DL, Op.getValueType(), Cond, TrueVal,
+                       FalseVal);
+  }
+  case ISD::BR_CC: {
+    ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
+
+    if (SDValue Cond =
+            lowerSignedComparison(CC, Op.getOperand(2), Op.getOperand(3))) {
+      return DAG.getNode(RedDSPISD::BRCOND, DL, MVT::Other, Op.getOperand(0),
+                         Cond, Op.getOperand(4));
+    }
+
+    if (CC == ISD::SETEQ || CC == ISD::SETNE) {
+      SDValue Cond = DAG.getNode(RedDSPISD::CMP, DL, MVT::i32,
+                                 Op.getOperand(2), Op.getOperand(3));
+      if (CC == ISD::SETNE)
+        Cond = DAG.getNode(ISD::XOR, DL, MVT::i32, Cond,
+                           DAG.getConstant(1, DL, MVT::i32));
+      return DAG.getNode(RedDSPISD::BRCOND, DL, MVT::Other, Op.getOperand(0),
+                         Cond, Op.getOperand(4));
+    }
+
+    report_fatal_error("RED DSP does not support this branch condition");
+  }
   case ISD::SETCC: {
     ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
-    if (CC != ISD::SETEQ && CC != ISD::SETNE)
-      report_fatal_error("RED DSP only supports integer equality comparisons");
-    SDValue Cmp = DAG.getNode(RedDSPISD::CMP, DL, MVT::i32, Op.getOperand(0),
-                              Op.getOperand(1));
-    if (CC == ISD::SETNE)
+
+    if (SDValue Result =
+            lowerSignedComparison(CC, Op.getOperand(0), Op.getOperand(1)))
+      return Result;
+
+    if (CC == ISD::SETEQ) {
+      SDValue Cmp = DAG.getNode(RedDSPISD::CMP, DL, MVT::i32, Op.getOperand(0),
+                                Op.getOperand(1));
+      return Cmp;
+    }
+
+    if (CC == ISD::SETNE) {
+      SDValue Cmp = DAG.getNode(RedDSPISD::CMP, DL, MVT::i32, Op.getOperand(0),
+                                Op.getOperand(1));
+
       return DAG.getNode(ISD::XOR, DL, MVT::i32, Cmp,
                          DAG.getConstant(1, DL, MVT::i32));
-    return Cmp;
+    }
+
+    report_fatal_error("RED DSP does not support this integer comparison");
   }
   case ISD::BRCOND:
     return DAG.getNode(RedDSPISD::BRCOND, DL, MVT::Other, Op.getOperand(0),
                        Op.getOperand(1), Op.getOperand(2));
-  case ISD::BR_CC: {
-    ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
-    if (CC != ISD::SETEQ && CC != ISD::SETNE)
-      report_fatal_error("RED DSP only supports integer equality branches");
-    SDValue Cmp = DAG.getNode(RedDSPISD::CMP, DL, MVT::i32, Op.getOperand(2),
-                              Op.getOperand(3));
-    if (CC == ISD::SETNE)
-      Cmp = DAG.getNode(ISD::XOR, DL, MVT::i32, Cmp,
-                        DAG.getConstant(1, DL, MVT::i32));
-    return DAG.getNode(RedDSPISD::BRCOND, DL, MVT::Other, Op.getOperand(0), Cmp,
-                       Op.getOperand(4));
-  }
   default:
     llvm_unreachable("unsupported RED DSP custom lowering");
   }
@@ -119,4 +193,44 @@ RedDSPTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CC,
   if (Glue)
     Ops.push_back(Glue);
   return DAG.getNode(RedDSPISD::RET_FLAG, DL, MVT::Other, Ops);
+}
+
+MachineBasicBlock *
+RedDSPTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
+                                                  MachineBasicBlock *BB) const {
+  const TargetInstrInfo &TII = *BB->getParent()->getSubtarget().getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+  assert(MI.getOpcode() == RedDSP::SELECT && "Unexpected instr to insert");
+
+  Register Dst = MI.getOperand(0).getReg();
+  Register Cond = MI.getOperand(1).getReg();
+  Register TrueVal = MI.getOperand(2).getReg();
+  Register FalseVal = MI.getOperand(3).getReg();
+
+  const BasicBlock *LLVM_BB = BB->getBasicBlock();
+  MachineFunction::iterator It = ++BB->getIterator();
+  MachineFunction *F = BB->getParent();
+  MachineBasicBlock *Copy0MBB = F->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *Copy1MBB = F->CreateMachineBasicBlock(LLVM_BB);
+  F->insert(It, Copy0MBB);
+  F->insert(It, Copy1MBB);
+
+  Copy1MBB->splice(Copy1MBB->begin(), BB,
+                   std::next(MachineBasicBlock::iterator(MI)), BB->end());
+  Copy1MBB->transferSuccessorsAndUpdatePHIs(BB);
+
+  BB->addSuccessor(Copy0MBB);
+  BB->addSuccessor(Copy1MBB);
+  BuildMI(BB, DL, TII.get(RedDSP::BNE)).addReg(Cond).addReg(RedDSP::R0).addMBB(Copy1MBB);
+
+  Copy0MBB->addSuccessor(Copy1MBB);
+
+  BuildMI(*Copy1MBB, Copy1MBB->begin(), DL, TII.get(RedDSP::PHI), Dst)
+      .addReg(FalseVal)
+      .addMBB(Copy0MBB)
+      .addReg(TrueVal)
+      .addMBB(BB);
+
+  MI.eraseFromParent();
+  return Copy1MBB;
 }

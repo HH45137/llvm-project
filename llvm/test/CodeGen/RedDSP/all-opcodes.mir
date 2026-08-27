@@ -38,6 +38,7 @@ body: |
     $r2 = SFLrr $r3, $r4
     $r2 = SFRrr $r3, $r4
     $r2 = CMPrr $r3, $r4
+    $r2 = CBErr $r3, $r4
     $r2 = ANDri $r3, 1
     $r2 = ORri $r3, 1
     $r2 = XORri $r3, 1
@@ -115,6 +116,7 @@ body: |
 # CHECK: SFL R2 R3 R4 X
 # CHECK: SFR R2 R3 R4 X
 # CHECK: CMP R2 R3 R4 X
+# CHECK: CBE R2 R3 R4 X
 # CHECK: AND.IMM R2 R3 X 1
 # CHECK: OR.IMM R2 R3 X 1
 # CHECK: XOR.IMM R2 R3 X 1
